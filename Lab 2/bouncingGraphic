@@ -1,0 +1,299 @@
+;
+; draw-image-subroutine.6502
+;
+; This is a routine that can place an arbitrary 
+; rectangular image on to the screen at given
+; coordinates.
+;
+; Chris Tyler 2024-09-17
+; Licensed under GPLv2+
+;
+
+;
+; The subroutine is below starting at the 
+; label "DRAW:"
+;
+
+; Test code for our subroutine
+; Moves an image diagonally across the screen
+
+; Zero-page variables
+define XPOS $20
+define YPOS $21
+define XINCREMENT $22
+define YINCREMENT $23
+
+; Constants for screen boundaries
+define XBOUNDARY 27
+define YBOUNDARY 27
+
+; Set up the data structure
+; The syntax #<LABEL returns the low byte of LABEL
+; The syntax #>LABEL returns the high byte of LABEL
+LDA #<G_X     ; POINTER TO GRAPHIC
+STA $10
+LDA #>G_X
+STA $11
+LDA #$05
+STA $12       ; IMAGE WIDTH
+STA $13       ; IMAGE HEIGHT
+
+; Set starting position
+LDA #$00
+STA XPOS
+LDA #$05
+STA YPOS
+
+; Select the increments
+LDA #$01
+STA XINCREMENT  ; start moving right (+1)
+LDA #$01
+STA YINCREMENT  ; start moving down (+1)
+
+; Main loop for animation
+MAINLOOP:
+
+  ; Set pointer to the image 
+  ; Use G_O or G_X as desired
+  LDA #<G_O
+  STA $10
+  LDA #>G_O
+  STA $11
+
+  ; Place the image on the screen
+  LDA #$10  ; Address in zero page of the data structure
+  LDX XPOS  ; X position
+  LDY YPOS  ; Y position
+  JSR DRAW  ; Call the subroutine
+
+  ; Delay to show the image
+  LDY #$00
+  LDX #$50
+DELAY:
+  DEY
+  BNE DELAY
+  DEX
+  BNE DELAY
+
+  ; Set pointer to the blank graphic
+  LDA #<G_BLANK
+  STA $10
+  LDA #>G_BLANK
+  STA $11
+
+  ; Draw the blank graphic to clear the old image
+  LDA #$10 ; LOCATION OF DATA STRUCTURE
+  LDX XPOS
+  LDY YPOS
+  JSR DRAW
+
+  ; Increment the X position
+  ; ---------------------------
+  ; If XINCREMENT is #$01, we move right by adding 1
+  ; If XINCREMENT is #$FF, we move left by adding -1
+
+  LDA XPOS
+  CLC             ; Clear carry before addition
+  ADC XINCREMENT  ; Add XINCREMENT to XPOS
+  STA XPOS
+
+  ; Check horizontal boundaries
+  ; ---------------------------
+
+  ; Check if XPOS == XBOUNDARY (right edge)
+  LDA XPOS
+  CMP #XBOUNDARY
+  BNE CHECK_X_LEFT ; If not equal, jump to check left boundary
+
+  ; If we hit the right boundary, reverse direction
+  LDA #$FF
+  STA XINCREMENT
+
+CHECK_X_LEFT:
+  ; Check if XPOS == 0 (left edge)
+  LDA XPOS
+  CMP #0
+  BNE UPDATE_Y ; If not equal, jump to update Y coordinate
+
+  ; If we hit the left boundary and direction == left, reverse direction
+  LDA #$01
+  STA XINCREMENT
+
+UPDATE_Y:
+  ; Update YPOS using YINCREMENT
+  ; ----------------------------
+  ; If YINCREMENT is #$01, we move down by adding 1
+  ; If YINCREMENT is #$FF, we move up by adding -1
+
+  LDA YPOS
+  CLC             ; Clear carry before addition
+  ADC YINCREMENT  ; Add YINCREMENT to YPOS
+  STA YPOS
+
+  ; Check vertical boundaries
+  ; ---------------------------
+
+  ; Check if YPOS == YBOUNDARY (bottom edge)
+  LDA YPOS
+  CMP #YBOUNDARY
+  BNE CHECK_Y_TOP  ; If not equal, jump to check the top edge
+
+  ; If we hit bottom edge, reverse direction
+  LDA #$FF
+  STA YINCREMENT
+
+CHECK_Y_TOP:
+  ; Check if YPOS == 0 (top edge)
+  LDA YPOS
+  CMP #0  ; If no boundary hit, continue moving
+  BNE MAINLOOP
+
+  ; If we hit top edge, reverse direction
+  LDA #$01
+  STA YINCREMENT
+
+  JMP MAINLOOP  ; Return to the main loop
+
+; ==========================================
+;
+; DRAW :: Subroutine to draw an image on 
+;         the bitmapped display
+;
+; Entry conditions:
+;    A - location in zero page of: 
+;        a pointer to the image (2 bytes)
+;        followed by the image width (1 byte)
+;        followed by the image height (1 byte)
+;    X - horizontal location to put the image
+;    Y - vertical location to put the image
+;
+; Exit conditions:
+;    All registers are undefined
+;
+; Zero-page memory locations
+define IMGPTR    $A0
+define IMGPTRH   $A1
+define IMGWIDTH  $A2
+define IMGHEIGHT $A3
+define SCRPTR    $A4
+define SCRPTRH   $A5
+define SCRX      $A6
+define SCRY      $A7
+
+DRAW:
+  ; SAVE THE X AND Y REG VALUES
+  STY SCRY
+  STX SCRX
+
+  ; GET THE DATA STRUCTURE
+  TAY
+  LDA $0000,Y
+  STA IMGPTR
+  LDA $0001,Y
+  STA IMGPTRH
+  LDA $0002,Y
+  STA IMGWIDTH
+  LDA $0003,Y
+  STA IMGHEIGHT
+
+  ; CALCULATE THE START OF THE IMAGE ON
+  ; SCREEN AND PLACE IN SCRPTRH
+  ;
+  ; THIS IS $0200 (START OF SCREEN) +
+  ; SCRX + SCRY * 32
+  ; 
+  ; WE'LL DO THE MULTIPLICATION FIRST
+  ; START BY PLACING SCRY INTO SCRPTR
+  LDA #$00
+  STA SCRPTRH
+  LDA SCRY
+  STA SCRPTR
+  ; NOW DO 5 LEFT SHIFTS TO MULTIPLY BY 32
+  LDY #$05     ; NUMBER OF SHIFTS
+MULT:
+  ASL SCRPTR   ; PERFORM 16-BIT LEFT SHIFT
+  ROL SCRPTRH
+  DEY
+  BNE MULT
+
+  ; NOW ADD THE X VALUE
+  LDA SCRX
+  CLC
+  ADC SCRPTR
+  STA SCRPTR
+  LDA #$00
+  ADC SCRPTRH
+  STA SCRPTRH
+
+  ; NOW ADD THE SCREEN BASE ADDRESS OF $0200
+  ; SINCE THE LOW BYTE IS $00 WE CAN IGNORE IT
+  LDA #$02
+  CLC
+  ADC SCRPTRH
+  STA SCRPTRH
+  ; NOTE WE COULD HAVE DONE TWO: INC SCRPTRH
+
+  ; NOW WE HAVE A POINTER TO THE IMAGE IN MEM
+  ; COPY A ROW OF IMAGE DATA
+COPYROW:
+  LDY #$00
+ROWLOOP:
+  LDA (IMGPTR),Y
+  STA (SCRPTR),Y
+  INY
+  CPY IMGWIDTH
+  BNE ROWLOOP
+
+  ; NOW WE NEED TO ADVANCE TO THE NEXT ROW
+  ; ADD IMGWIDTH TO THE IMGPTR
+  LDA IMGWIDTH
+  CLC
+  ADC IMGPTR
+  STA IMGPTR
+  LDA #$00
+  ADC IMGPTRH
+  STA IMGPTRH
+
+  ; ADD 32 TO THE SCRPTR
+  LDA #32
+  CLC
+  ADC SCRPTR
+  STA SCRPTR
+  LDA #$00
+  ADC SCRPTRH
+  STA SCRPTRH
+
+  ; DECREMENT THE LINE COUNT AND SEE IF WE'RE
+  ; DONE
+  DEC IMGHEIGHT
+  BNE COPYROW
+
+  RTS
+
+; ==========================================
+
+; 5x5 pixel images
+
+; Image of a blue "O" on black background
+G_O:
+DCB $00,$0e,$0e,$0e,$00
+DCB $0e,$00,$00,$00,$0e
+DCB $0e,$00,$00,$00,$0e
+DCB $0e,$00,$00,$00,$0e
+DCB $00,$0e,$0e,$0e,$00
+
+; Image of a yellow "X" on a black background
+G_X:
+DCB $07,$00,$00,$00,$07
+DCB $00,$07,$00,$07,$00
+DCB $00,$00,$07,$00,$00
+DCB $00,$07,$00,$07,$00
+DCB $07,$00,$00,$00,$07
+
+; Image of a black square
+G_BLANK:
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
