@@ -1,0 +1,318 @@
+;
+; draw-image-subroutine.6502
+;
+; This is a routine that can place an arbitrary 
+; rectangular image on to the screen at given
+; coordinates.
+;
+; Chris Tyler 2024-09-17
+; Licensed under GPLv2+
+;
+
+;
+; The subroutine is below starting at the 
+; label "DRAW:"
+;
+
+; Test code for our subroutine
+; Moves an image diagonally across the screen
+
+; Zero-page variables
+define XPOS $20
+define YPOS $21
+
+; TO MAKE OUR GRAPH BOUNCE WE'LL NEED TO TRACK
+; THE DIRECTION IT'S GOING TOWARDS, AND REVERSE
+; IT WHEN IT REACHES THE EDGE OF THE PAGE
+define XDIR $30 ; IF X = 0 MOVING LEFT, 1 = RIGHT
+define YDIR $31 ; IF Y = 0 MOVING UP, 1 = DOWN
+
+; WE WILL THEN INITIALIZE OUR DIRECTION FLAGS
+; TO THE SAME DIRECTION OUR PROGRAM STARTS MOVING (RIGHT DOWN)
+LDA #$01 
+STA XDIR
+STA YDIR
+
+; Set up the data structure
+; The syntax #<LABEL returns the low byte of LABEL
+; The syntax #>LABEL returns the high byte of LABEL
+LDA #<G_X     ; POINTER TO GRAPHIC
+STA $10 
+LDA #>G_X
+STA $11
+LDA #$05
+STA $12       ; IMAGE WIDTH
+STA $13       ; IMAGE HEIGHT
+
+; Set initial position X=Y=0
+LDA #$01 
+STA XPOS
+LDA #$0A
+STA YPOS
+
+; Main loop for diagonal animation
+MAINLOOP:
+LDA XDIR
+CMP #01          ; Check if XDIR is 1
+BEQ XIS1_CHECK     ; If yes, check YDIR for 1
+
+LDA XDIR
+CMP #00          ; Check if XDIR is 0
+BEQ XIS0_CHECK     ; If yes, check YDIR for 0
+
+JMP CONTINUE_LOOP ; If neither condition is met, continue the loop
+
+XIS1_CHECK:
+  LDA YDIR
+  CMP #01          ; Check if YDIR is 1
+  BEQ SET_COLOR_YELLOW ; If both are 1, set color to yellow
+  JMP SET_COLOR_BLUE     ; If X is 1 and Y is 0, set color to blue
+
+XIS0_CHECK:
+  LDA YDIR
+  CMP #00          ; Check if YDIR is 0
+  BEQ SET_COLOR_YELLOW ; If both are 0, set color to yellow
+  JMP SET_COLOR_BLUE     ; If X is 0 and Y is 1, set color to blue
+
+SET_COLOR_YELLOW:
+  ; Set pointer to the image to yellow X
+  LDA #<G_X
+  STA $10
+  LDA #>G_X
+  STA $11
+  JMP CONTINUE_LOOP 
+
+SET_COLOR_BLUE:
+  ; Set pointer to the image to blue O
+  LDA #<G_O
+  STA $10
+  LDA #>G_O
+  JMP CONTINUE_LOOP
+
+CONTINUE_LOOP:
+  ; Place the image on the screen
+  LDA #$10  ; Address in zeropage of the data structure
+  LDX XPOS  ; X position
+  LDY YPOS  ; Y position
+  JSR DRAW  ; Call the subroutine
+
+  ; Delay to show the image
+  LDY #$00
+  LDX #$50
+DELAY:
+  DEY
+  BNE DELAY
+  DEX
+  BNE DELAY
+
+  ; Set pointer to the blank graphic
+  LDA #<G_BLANK
+  STA $10
+  LDA #>G_BLANK
+  STA $11
+
+  ; Draw the blank graphic to clear the old image
+  LDA #$10 ; LOCATION OF DATA STRUCTURE
+  LDX XPOS
+  LDY YPOS
+  JSR DRAW
+
+; ==========================================
+ ; BEFORE INCREMENTING THE POSITION, WE WILL CHECK IF
+  ; WE HIT THE EDGE OF THE SCREEN, IF YES, WE'LL CHANGE
+  ; THE DIRECTION TO GIVE THE BOUNCING EFFECT 
+  ; XPOS CHECK AND DIRECTION CHANGE
+  LDA XPOS 
+  CMP #26; IF XPOS >= 26, WE'RE AT THE RIGHT EDGE OF THE SCREEN 
+  BCC X_LEFT_CHECK; IF NOT AT THE RIGHT EDGE, CHECK FOR LEFT
+  LDA #$00
+  STA XDIR ; REVERSE THE DIRECTION 
+
+X_LEFT_CHECK: 
+  LDA XPOS
+  CMP #$00 ; IF XPOS <= 0 WE'RE AT THE LEFT EDGE
+  BNE Y_CHECK ; IF NOT AT THE LEFT EDGE, CHECK Y 
+  LDA #$01
+  STA XDIR
+
+; XPOS CHECK AND DIRECTION CHANGE
+Y_CHECK: 
+  LDA YPOS 
+  CMP #26 ; IF YPOS >= 31 IT HIT BOTTOM EDGE
+  BCC Y_UP_CHECK ; IF NOT AT BOTTOM EDGE, CHECK UPPER EDGE
+  LDA #$00 
+  STA YDIR
+
+Y_UP_CHECK:
+  LDA YPOS
+  CMP #$00 ; IF YPOS <= 0 IT HIT UPPER EDGE 
+  BNE UPDATE_POSITION ; IF DID NOT HIT UPPER EDGE 
+  LDA #$01
+  STA YDIR
+
+; FUNCTION BELOW WILL INCREMENT OR DECREMENT DIRECTION 
+; VARIABLES BASED ON THE CURRENT DIRECTION OF OUR ANIMATION
+; IF XPOS = 0 SHOULD DECREMENT XPOS TO MOVE ANIMATION LEFT
+; IF YPOS = 0 SHOULD DECREMENT YPOS TO MOVE UP 
+UPDATE_POSITION:
+  LDA XDIR 
+  BEQ DECREMENT_XPOS  
+  INC XPOS ; IF NOT EQUAL TO 0, WE CAN INCREMENT THE POSITION
+  JMP YPOS_CHECK
+
+DECREMENT_XPOS: 
+  DEC XPOS 
+
+YPOS_CHECK:
+  LDA YDIR 
+  BEQ DECREMENT_YPOS
+  INC YPOS ; IF NOT EQUAL TO 0, WE CAN INCREMENT THE POSITION
+  INC YPOS ; INCREMENT AGAIN SO THE LOOP IS NOT IN ONE PLACE
+  JMP MAINLOOP ; JUMP TO MAINLOOP TO PREVENT ANOTHER DECREMENT FROM HAPPENING
+
+DECREMENT_YPOS:
+  DEC YPOS
+  JMP MAINLOOP ; BACK TO MAINLOOP TO KEEP PROGRAM GOING
+; ==========================================
+;
+; DRAW :: Subroutine to draw an image on 
+;         the bitmapped display
+;
+; Entry conditions:
+;    A - location in zero page of: 
+;        a pointer to the image (2 bytes)
+;        followed by the image width (1 byte)
+;        followed by the image height (1 byte)
+;    X - horizontal location to put the image
+;    Y - vertical location to put the image
+;
+; Exit conditions:
+;    All registers are undefined
+;
+; Zero-page memory locations
+define IMGPTR    $A0
+define IMGPTRH   $A1
+define IMGWIDTH  $A2
+define IMGHEIGHT $A3
+define SCRPTR    $A4
+define SCRPTRH   $A5
+define SCRX      $A6
+define SCRY      $A7
+
+DRAW:
+  ; SAVE THE X AND Y REG VALUES
+  STY SCRY
+  STX SCRX
+
+  ; GET THE DATA STRUCTURE
+  TAY
+  LDA $0000,Y
+  STA IMGPTR
+  LDA $0001,Y
+  STA IMGPTRH
+  LDA $0002,Y
+  STA IMGWIDTH
+  LDA $0003,Y
+  STA IMGHEIGHT
+
+  ; CALCULATE THE START OF THE IMAGE ON
+  ; SCREEN AND PLACE IN SCRPTRH
+  ;
+  ; THIS IS $0200 (START OF SCREEN) +
+  ; SCRX + SCRY * 32
+  ; 
+  ; WE'LL DO THE MULTIPLICATION FIRST
+  ; START BY PLACING SCRY INTO SCRPTR
+  LDA #$00
+  STA SCRPTRH
+  LDA SCRY
+  STA SCRPTR
+  ; NOW DO 5 LEFT SHIFTS TO MULTIPLY BY 32
+  LDY #$05     ; NUMBER OF SHIFTS
+MULT:
+  ASL SCRPTR   ; PERFORM 16-BIT LEFT SHIFT
+  ROL SCRPTRH
+  DEY
+  BNE MULT
+
+  ; NOW ADD THE X VALUE
+  LDA SCRX
+  CLC
+  ADC SCRPTR
+  STA SCRPTR
+  LDA #$00
+  ADC SCRPTRH
+  STA SCRPTRH
+
+  ; NOW ADD THE SCREEN BASE ADDRESS OF $0200
+  ; SINCE THE LOW BYTE IS $00 WE CAN IGNORE IT
+  LDA #$02
+  CLC
+  ADC SCRPTRH
+  STA SCRPTRH
+  ; NOTE WE COULD HAVE DONE TWO: INC SCRPTRH
+
+  ; NOW WE HAVE A POINTER TO THE IMAGE IN MEM
+  ; COPY A ROW OF IMAGE DATA
+COPYROW:
+  LDY #$00
+ROWLOOP:
+  LDA (IMGPTR),Y
+  STA (SCRPTR),Y
+  INY
+  CPY IMGWIDTH
+  BNE ROWLOOP
+
+  ; NOW WE NEED TO ADVANCE TO THE NEXT ROW
+  ; ADD IMGWIDTH TO THE IMGPTR
+  LDA IMGWIDTH
+  CLC
+  ADC IMGPTR
+  STA IMGPTR
+  LDA #$00
+  ADC IMGPTRH
+  STA IMGPTRH
+ 
+  ; ADD 32 TO THE SCRPTR
+  LDA #32
+  CLC
+  ADC SCRPTR
+  STA SCRPTR
+  LDA #$00
+  ADC SCRPTRH
+  STA SCRPTRH
+
+  ; DECREMENT THE LINE COUNT AND SEE IF WE'RE
+  ; DONE
+  DEC IMGHEIGHT
+  BNE COPYROW
+
+  RTS
+
+; ==========================================
+
+; 5x5 pixel images
+
+; Image of a blue "O" on black background
+G_O:
+DCB $00,$0e,$0e,$0e,$00
+DCB $0e,$00,$00,$00,$0e
+DCB $0e,$00,$00,$00,$0e
+DCB $0e,$00,$00,$00,$0e
+DCB $00,$0e,$0e,$0e,$00
+
+; Image of a yellow "X" on a black background
+G_X:
+DCB $07,$00,$00,$00,$07
+DCB $00,$07,$00,$07,$00
+DCB $00,$00,$07,$00,$00
+DCB $00,$07,$00,$07,$00
+DCB $07,$00,$00,$00,$07
+
+; Image of a black square
+G_BLANK:
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
