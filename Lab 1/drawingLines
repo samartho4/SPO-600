@@ -1,0 +1,30 @@
+lda #$07 
+ldy #$00
+loop:   
+  sta $0200,y
+  sta $0300,y
+  sta $0400,y
+  sta $0500,y
+  iny 
+bne loop
+
+lda #$2
+loop2:   
+  sta $0200,y
+  iny 
+  cpy #$20
+bne loop2
+
+lda #$5
+ldy #$e0
+loop3:   
+  sta $0500,y
+  iny 
+bne loop3
+
+lda #$6
+ldy #$e0
+loop4:  
+  sta $0500,y
+  iny 
+bne loop3
