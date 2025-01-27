@@ -1,0 +1,89 @@
+Lab 1
+
+Setup
+
+1. Open the 6502 Emulator at http://6502.cdot.systems in another tab or window, keeping this lab open.
+
+Important: The emulator does not save your work automatically. Remember to periodically save it to a file (copy-and-paste the code or use the Save button to create local files). Recommendation: save your files to a directory, and use git to manage that directory.
+
+Bitmap Code
+
+2. The following code fills the emulator's bitmapped display with the colour yellow. Paste this code into the emulator:
+
+ 	lda #$00	; set a pointer in memory location $40 to point to $0200
+ 	sta $40		; ... low byte ($00) goes in address $40
+ 	lda #$02	
+ 	sta $41		; ... high byte ($02) goes into address $41
+ 	lda #$07	; colour number
+ 	ldy #$00	; set index to 0
+ loop:	sta ($40),y	; set pixel colour at the address (pointer)+Y
+ 	iny		; increment index
+ 	bne loop	; continue until done the page (256 pixels)
+ 	inc $41		; increment the page
+ 	ldx $41		; get the current page number
+ 	cpx #$06	; compare with 6
+ 	bne loop	; continue until done all pages
+3. Test the code by pressing the Assemble button, then the Run button. If the there are any errors assembling (compiling) the code, they will appear in the message area at the bottom of the page. Make sure the code is running correctly and that you understands how it works. Don't be afraid to experiment!
+
+Calculating Performance
+
+This is the key part of the lab.
+
+4. Calculate how long it takes for the code to execute, assuming a 1 MHz clock speed.
+
+Tip: The most common problem with performance analysis is the incorrect calculation of the number of times each instruction will execute. Check that part of your work carefully.
+
+5. Also calculate the total memory usage for the program code plus any pointers or variables.
+
+Refer to the video on Calculating 6502 Program Execution Time for instructions on how to do this. Note that the example in the video is colouring only 1/4 of the bitmapped display, not the entire bitmapped screen - your result will be longer and different.
+
+6. Find one or more ways to decrease the time taken to fill the screen with a solid colour. Calculate the execution time of the fastest version of this program that you can create. Challenge: the fastest version is nearly twice as fast as the original version shown above!
+
+Modifying the Code
+
+7. Change the code to fill the display with light blue instead of yellow. (Tip: you can find the colour codes on the 6502 Emulator page).
+
+8. Change the code to fill the display with a different colour on each page (each “page” will be one-quarter of the bitmapped display).
+
+9. Make each pixel a random colour. (Hint: use the psudo-random number generator mentioned on the 6502 Emulator page).
+
+Experiments
+
+Go back to the bitmap code above, and try these experiments:
+
+Add this instruction after the loop: label and before the sta ($40),y instruction: tya
+What visual effect does this cause, and how many colours are on the screen? Why?
+Add this instruction after the tya: lsr
+What visual effect does this cause, and how many colours are on the screen? Why?
+Repeat the above tests with two, three, four, and five lsr instructions in a row. Describe and explain the effect in each case.
+Repeat the tests using asl instructions instead of lsr instructions. Describe and explain the effect in each case.
+Revert to the original code.
+The original code includes one iny instruction. Test with one to five consecutive iny instructions. Describe and explain the effect in each case. Note: it is helpful to place the Speed slider is on its lowest setting (left) for these experiments.
+Revert to the original code.
+Challenges (Optional, Recommended)
+
+Set all of the display pixels to the same colour, except for the middle four pixels, which will be drawn in another colour.
+Write a program which draws lines around the edge of the display:
+A red line across the top
+A green line across the bottom
+A blue line across the right side.
+A purple line across the left size.
+Write-Up
+
+Post an entry on your blog describing your experiments in this lab. Follow the Blog Guidelines. Include code as text (and not screenshots), but feel free to include screenshots of the bitmapped display.
+
+Include in your blog post:
+
+An introduction, so that someone who happens across your blog will understand the context of what you're writing about.
+The results from the Calculating Performance and Modifying Code portions of the lab, including the code, a description of how the code works, and the results produced.
+Any significant code in a form that allows it to be tested.
+In the case of this lab, this is the version of the software that you've modified to improve performance.
+This code should be either (a) directly included in the blog in a form where it can be easily cut-and-pasted into the emulator for testing, or (b) in a repository so it can be easily cut-and-pasted or downloaded for testing. (Recommendation: test it!)
+The results of the Optional sections, if you performed them, and your explaination for each observed result.
+Your experiences with this lab – your impressions of Assembly Language, what you learned, and your reflections on the process.
+Remember that labs are marked on a scale of 0-3:
+
+0 - Lab not completed, or significant errors.
+1 - Very basic completion, or some small errors.
+2 - Satisfactory completion of the lab. (This is the default mark for lab completion).
+3 - Lab completed with additional experiments, investigation, research, or explanation. For example, you could do some of the optional sections in this lab, and include those in your blog writeup – or you could create your own experiments.
