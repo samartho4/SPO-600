@@ -1,0 +1,12 @@
+ldy #$00
+loop:   
+  lda #$12
+  sta $0200,y
+  lda #$13
+  sta $0300,y
+  lda #$14
+  sta $0400,y
+  lda #$15
+  sta $0500,y
+iny 
+bne loop
