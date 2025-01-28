@@ -1,0 +1,586 @@
+; ROM routine entry points
+define      SCINIT      $ff81 ; initialize/clear screen
+define      CHRIN       $ffcf ; input character from keyboard
+define      CHROUT      $ffd2 ; output character to screen
+define      SCREEN      $ffed ; get screen size
+define      PLOT        $fff0 ; get/set cursor coordinates
+
+; zeropage variables
+define      PRINT_PTR   $10
+define      PRINT_PTR_H $11
+; 12 for number height
+; 13 for number width
+define      value       $14
+define      value_h     $15
+define    operation $1
+define    XPOS $20
+define    YPOS $21
+
+; absolute variables
+define      GETNUM_1    $0080
+define      GETNUM_2    $0081
+
+
+; set width and height of numbers on the screen
+LDA #$05
+STA $12       ; IMAGE WIDTH
+STA $13       ; IMAGE HEIGHT
+
+; Set initial position X=Y=0
+LDA #$01
+STA XPOS
+STA YPOS
+
+jsr SCINIT
+jsr CHRIN
+jsr PRINT
+dcb "C","a","l","c","u","l","a","t","o","r",00
+
+
+ADDNUMBERS:
+
+  ; get the first number
+  jsr PRINT
+  dcb $0d,$0d,"E","n","t","e","r",32,"a",32,"n","u","m","b","e","r"
+  dcb "(","0","-","9","9",")",":"
+  dcb 32,32,32,32,32,32,32,32,00
+  lda #$00
+    sta value_h
+    jsr GETNUM
+    sta value
+
+  ; get the second number
+    jsr PRINT
+  dcb "E","n","t","e","r",32,"a","n","o","t","h","e","r"
+  dcb 32,"n","u","m","b","e","r",32,"(","0","-","9","9",")",":",32,00
+
+  jsr GETNUM
+
+  sed
+    clc
+    adc value
+    cld
+
+    sta value
+    bcc result
+    inc value_h
+
+result:     
+    pha
+        jsr PRINT
+
+  dcb "R","e","s","u","l","t",":",32
+  dcb 32,32,32,32,32,32,32
+  dcb 32,32,32,32,32,32,32
+  dcb 32,32,32,32,32,32,32
+  dcb 00
+
+        lda value_h
+        beq low_digits
+        and #$0f
+        ora #$30
+        jsr CHROUT
+
+    jsr update_value
+    ; draw this digit on the screen
+    LDA #$10  ; Address in zeropage of the data structure
+    LDX XPOS  ; X position
+    LDY YPOS  ; Y position
+    JSR DRAW  ; Call the subroutine
+    LDA XPOS       ; Load the current value of XPOS into the accumulator
+    CLC             ; Clear the carry flag to ensure proper addition
+    ADC #$06       ; Add the immediate value 6 to the accumulator
+    STA XPOS       ; Store the new value back into XPOS
+
+        jmp draw_100s
+
+low_digits: lda value
+        and #$f0
+        beq ones_digit
+
+draw_100s:  lda value
+        lsr
+        lsr
+        lsr
+        lsr
+        ora #$30
+        jsr CHROUT
+
+    jsr update_value
+    ; draw this digit on the screen
+    LDA #$10  ; Address in zeropage of the data structure
+    LDX XPOS  ; X position
+    LDY YPOS  ; Y position
+    JSR DRAW  ; Call the subroutine
+    LDA XPOS       ; Load the current value of XPOS into the accumulator
+    CLC             ; Clear the carry flag to ensure proper addition
+    ADC #$06       ; Add the immediate value 6 to the accumulator
+    STA XPOS       
+
+
+ones_digit: lda value
+        and #$0f
+        ora #$30
+        jsr CHROUT
+    jsr update_value
+    ; draw this digit on the screen
+    LDA #$10  ; Address in zeropage of the data structure
+    LDX XPOS  ; X position
+    LDY YPOS  ; Y position
+    JSR DRAW  ; Call the subroutine
+    LDA XPOS       ; Load the current value of XPOS into the accumulator
+    CLC             ; Clear the carry flag to ensure proper addition
+    ADC #$06       ; Add the immediate value 6 to the accumulator
+    STA XPOS   
+
+  ; end the programe
+  RTS  
+
+
+; ==========================================
+;
+; DRAW :: Subroutine to draw an image on 
+;         the bitmapped display
+;
+; Entry conditions:
+;    A - location in zero page of: 
+;        a pointer to the image (2 bytes)
+;        followed by the image width (1 byte)
+;        followed by the image height (1 byte)
+;    X - horizontal location to put the image
+;    Y - vertical location to put the image
+;
+; Exit conditions:
+;    All registers are undefined
+;
+; Zero-page memory locations
+define IMGPTR    $A0
+define IMGPTRH   $A1
+define IMGWIDTH  $A2
+define IMGHEIGHT $A3
+define SCRPTR    $A4
+define SCRPTRH   $A5
+define SCRX      $A6
+define SCRY      $A7
+
+DRAW:
+  ; SAVE THE X AND Y REG VALUES
+  STY SCRY
+  STX SCRX
+
+  ; GET THE DATA STRUCTURE
+  TAY
+  LDA $0006,Y
+  STA IMGPTR
+  LDA $0007,Y
+  STA IMGPTRH
+  LDA $0002,Y
+  STA IMGWIDTH
+  LDA $0003,Y
+  STA IMGHEIGHT
+
+  ; CALCULATE THE START OF THE IMAGE ON
+  ; SCREEN AND PLACE IN SCRPTRH
+  ;
+  ; THIS IS $0200 (START OF SCREEN) +
+  ; SCRX + SCRY * 32
+  ; 
+  ; WE'LL DO THE MULTIPLICATION FIRST
+  ; START BY PLACING SCRY INTO SCRPTR
+  LDA #$00
+  STA SCRPTRH
+  LDA SCRY
+  STA SCRPTR
+  ; NOW DO 5 LEFT SHIFTS TO MULTIPLY BY 32
+  LDY #$05     ; NUMBER OF SHIFTS
+MULT:
+  ASL SCRPTR   ; PERFORM 16-BIT LEFT SHIFT
+  ROL SCRPTRH
+  DEY
+  BNE MULT
+
+  ; NOW ADD THE X VALUE
+  LDA SCRX
+  CLC
+  ADC SCRPTR
+  STA SCRPTR
+  LDA #$00
+  ADC SCRPTRH
+  STA SCRPTRH
+
+  ; NOW ADD THE SCREEN BASE ADDRESS OF $0200
+  ; SINCE THE LOW BYTE IS $00 WE CAN IGNORE IT
+  LDA #$02
+  CLC
+  ADC SCRPTRH
+  STA SCRPTRH
+  ; NOTE WE COULD HAVE DONE TWO: INC SCRPTRH
+
+  ; NOW WE HAVE A POINTER TO THE IMAGE IN MEM
+  ; COPY A ROW OF IMAGE DATA
+COPYROW:
+  LDY #$00
+ROWLOOP:
+  LDA (IMGPTR),Y
+  STA (SCRPTR),Y
+  INY
+  CPY IMGWIDTH
+  BNE ROWLOOP
+
+  ; NOW WE NEED TO ADVANCE TO THE NEXT ROW
+  ; ADD IMGWIDTH TO THE IMGPTR
+  LDA IMGWIDTH
+  CLC
+  ADC IMGPTR
+  STA IMGPTR
+  LDA #$00
+  ADC IMGPTRH
+  STA IMGPTRH
+
+  ; ADD 32 TO THE SCRPTR
+  LDA #32
+  CLC
+  ADC SCRPTR
+  STA SCRPTR
+  LDA #$00
+  ADC SCRPTRH
+  STA SCRPTRH
+
+  ; DECREMENT THE LINE COUNT AND SEE IF WE'RE
+  ; DONE
+  DEC IMGHEIGHT
+  BNE COPYROW
+
+  RTS
+
+
+PRINT:      pla
+        clc
+        adc #$01
+        sta PRINT_PTR
+        pla
+        sta PRINT_PTR_H
+
+        tya
+        pha
+
+        ldy #$00
+print_next: lda (PRINT_PTR),y
+        beq print_done
+
+        jsr CHROUT
+        iny
+        jmp print_next
+
+print_done: tya
+        clc
+        adc PRINT_PTR
+        sta PRINT_PTR
+
+        lda PRINT_PTR_H
+        adc #$00
+        sta PRINT_PTR_H
+
+        pla
+        tay
+
+        lda PRINT_PTR_H
+        pha
+        lda PRINT_PTR
+        pha
+
+        rts
+
+; ---------------------------------------------------
+; GETNUM - get a 2-digit decimal number
+;
+; Returns A containing 2-digit BCD value
+
+GETNUM:     txa
+        pha
+        tya
+        pha
+
+        ldx #$00    ; count of digits received
+        stx GETNUM_1
+        stx GETNUM_2
+
+
+getnum_cursor:  lda #$a0    ; black square
+        jsr CHROUT
+        lda #$83    ; left cursor
+        jsr CHROUT
+
+getnum_key: jsr CHRIN
+        cmp #$00
+        beq getnum_key
+
+        cmp #$08    ; BACKSPACE
+        beq getnum_bs
+
+        cmp #$0d    ; ENTER
+        beq getnum_enter
+
+        cmp #$30    ; "0"
+        bmi getnum_key
+
+        cmp #$3a    ; "9" + 1
+        bmi getnum_digit
+
+        jmp getnum_key
+
+getnum_enter:   cpx #$00
+        beq getnum_key
+
+        lda #$20
+        jsr CHROUT
+        lda #$0d
+        jsr CHROUT
+
+        lda GETNUM_1
+
+        cpx #$01
+        beq getnum_done
+
+        asl
+        asl
+        asl
+        asl
+        ora GETNUM_2
+
+getnum_done:    sta GETNUM_1
+        pla
+        tay
+        pla
+        tax
+        lda GETNUM_1
+
+        rts
+
+getnum_digit:   cpx #$02
+        bpl getnum_key
+        pha
+        jsr CHROUT
+        pla
+        and #$0f
+        sta GETNUM_1,x
+        inx
+        jmp getnum_cursor
+
+getnum_bs:  cpx #$00
+        beq getnum_key
+        lda #$20
+        jsr CHROUT
+        lda #$83
+        jsr CHROUT
+        jsr CHROUT
+        lda #$20
+        jsr CHROUT
+        lda #$83
+        jsr CHROUT
+        dex
+        lda #$00
+        sta GETNUM_1,x
+        jmp getnum_cursor
+
+update_value:
+    cmp #$31       ; Compare with '0'
+    bmi update_0   ; If less than '0', jump to update_0
+
+    cmp #$32       ; Compare with '1'
+    bmi update_1   ; If less than '1', jump to update_1
+
+    cmp #$33       ; Compare with '2'
+    bmi update_2   ; If less than '2', jump to update_2
+
+    cmp #$34       ; Compare with '3'
+    bmi update_3   ; If less than '3', jump to update_3
+
+    cmp #$35       ; Compare with '4'
+    bmi update_4   ; If less than '4', jump to update_4
+
+    cmp #$36       ; Compare with '5'
+    bmi update_5   ; If less than '5', jump to update_5
+
+    cmp #$37       ; Compare with '6'
+    bmi update_6   ; If less than '6', jump to update_6
+
+    cmp #$38       ; Compare with '7'
+    bmi update_7   ; If less than '7', jump to update_7
+
+    cmp #$39       ; Compare with '8'
+    bmi update_8   ; If less than '8', jump to update_8
+
+    cmp #$40       ; Compare with '9'
+    bmi update_9   ; If less than '9', jump to update_9
+
+    rts             ; Return if no updates are made
+
+update_0:
+    LDA #<N_0
+    STA $16
+    LDA #>N_0
+    STA $17
+    rts
+
+update_1:
+    LDA #<N_1
+    STA $16
+    LDA #>N_1
+    STA $17
+    rts
+
+update_2:
+    LDA #<N_2
+    STA $16
+    LDA #>N_2
+    STA $17
+    rts
+
+update_3:
+    LDA #<N_3
+    STA $16
+    LDA #>N_3
+    STA $17
+    rts
+
+update_4:
+    LDA #<N_4
+    STA $16
+    LDA #>N_4
+    STA $17
+    rts
+
+update_5:
+    LDA #<N_5
+    STA $16
+    LDA #>N_5
+    STA $17
+    rts
+
+update_6:
+    LDA #<N_6
+    STA $16
+    LDA #>N_6
+    STA $17
+    rts
+
+update_7:
+    LDA #<N_7
+    STA $16
+    LDA #>N_7
+    STA $17
+    rts
+
+update_8:
+    LDA #<N_8
+    STA $16
+    LDA #>N_8
+    STA $17
+    rts
+
+update_9:
+    LDA #<N_9
+    STA $16
+    LDA #>N_9
+    STA $17
+    rts
+
+
+
+
+
+; ==========================================
+; 5x5 pixel numbers
+; Image of a blue "O" on black background
+G_O:
+DCB $11,$11,$11,$11,$11
+DCB $11,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+DCB $00,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+
+N_0:
+DCB $00,$11,$11,$11,$00
+DCB $11,$00,$00,$00,$11
+DCB $11,$00,$00,$00,$11
+DCB $11,$00,$00,$00,$11
+DCB $00,$11,$11,$11,$00
+
+N_1:
+DCB $00,$11,$11,$00,$00
+DCB $11,$00,$11,$00,$00
+DCB $11,$00,$11,$00,$00
+DCB $00,$00,$11,$00,$00
+DCB $11,$11,$11,$11,$11
+
+N_2:
+DCB $00,$11,$11,$11,$11
+DCB $11,$00,$00,$11,$00
+DCB $00,$00,$11,$00,$00
+DCB $00,$11,$00,$00,$11
+DCB $11,$11,$11,$11,$00
+
+N_3:
+DCB $11,$11,$11,$11,$11
+DCB $00,$00,$00,$00,$11
+DCB $00,$00,$11,$11,$11
+DCB $00,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+
+N_4:
+DCB $00,$00,$00,$11,$00
+DCB $00,$00,$11,$11,$00
+DCB $00,$11,$00,$11,$00
+DCB $11,$11,$11,$11,$11
+DCB $00,$00,$00,$11,$00
+
+N_5:
+DCB $11,$11,$11,$11,$11
+DCB $11,$00,$00,$00,$00
+DCB $11,$11,$11,$11,$11
+DCB $00,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+
+N_6:
+DCB $11,$11,$11,$11,$11
+DCB $11,$00,$00,$00,$00
+DCB $11,$11,$11,$11,$11
+DCB $11,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+
+N_7:
+DCB $11,$11,$11,$11,$00
+DCB $00,$00,$00,$11,$00
+DCB $00,$00,$11,$11,$11
+DCB $00,$00,$00,$11,$00
+DCB $00,$00,$00,$11,$00
+
+N_8:
+DCB $11,$11,$11,$11,$11
+DCB $11,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+DCB $11,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+
+N_9:
+DCB $11,$11,$11,$11,$11
+DCB $11,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+DCB $00,$00,$00,$00,$11
+DCB $11,$11,$11,$11,$11
+
+G_X:
+DCB $07,$00,$00,$00,$07
+DCB $00,$07,$00,$07,$00
+DCB $00,$00,$07,$00,$00
+DCB $00,$07,$00,$07,$00
+DCB $07,$00,$00,$00,$07
+
+; Image of a black square
+G_BLANK:
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
+DCB $00,$00,$00,$00,$00
