@@ -1,150 +1,151 @@
 ; =================== ROM Routine Definitions ===================
 ; Original: define      SCINIT      $ff81 ; initialize/clear screen
 ;define      SCINIT      $ff81 ; initialize/clear screen
-define      CLEAR_SCREEN $ff81   ; initialize/clear screen (changed name)
+define      CLEAR_SCREEN $ff81   ; (changed name)
 
 ; Original: define      CHRIN       $ffcf ; input character from keyboard
 ;define      CHRIN       $ffcf ; input character from keyboard
-define      GET_CHAR    $ffcf   ; input character (changed name)
+define      GET_CHAR    $ffcf   ; (changed name)
 
 ; Original: define      CHROUT      $ffd2 ; output character to screen
 ;define      CHROUT      $ffd2 ; output character to screen
-define      PUT_CHAR    $ffd2   ; output character (changed name)
-
-; Original: define      SCREEN      $ffed ; get screen size
-;define      SCREEN      $ffed ; get screen size
-define      SCR_SIZE    $ffed   ; screen size routine (changed name)
-
-; Original: define      PLOT        $fff0 ; get/set cursor coordinates
-;define      PLOT        $fff0 ; get/set cursor coordinates
-define      SET_CURSOR  $fff0   ; set/get cursor coordinates (changed name)
+define      PUT_CHAR    $ffd2   ; (changed name)
 
 ; =================== Zero‑Page Variable Definitions ===================
 ; Original: define      PRINT_PTR   $10
 ;define      PRINT_PTR   $10
-define      PRNT_PTR    $10     ; pointer (low) for printing (renamed)
+define      PRNT_PTR    $10     ; (renamed)
 
 ; Original: define      PRINT_PTR_H $11
 ;define      PRINT_PTR_H $11
-define      PRNT_PTR_H  $11     ; pointer (high) for printing (renamed)
+define      PRNT_PTR_H  $11     ; (renamed)
 
 ; Original: define      value       $14
 ;define      value       $14
-define      SUM_BCD     $14     ; holds BCD result (renamed)
+define      SUM_BCD     $14     ; now holds the minuend/result (changed function)
 
 ; Original: define      value_h     $15
 ;define      value_h     $15
-define      SUM_H       $15     ; holds hundreds digit (renamed)
+define      SUM_H       $15     ; holds the hundreds digit (changed naming)
 
 ; Original: define    operation $1
 ;define    operation $1
-define      OP_CODE     $01     ; operation code (reserved; renamed)
+define      OP_CODE     $01     ; (renamed)
 
 ; Original: define    XPOS $20
 ;define    XPOS $20
-define      CUR_X       $20     ; current X coordinate (renamed)
+define      CUR_X       $20     ; (renamed)
 
 ; Original: define    YPOS $21
 ;define    YPOS $21
-define      CUR_Y       $21     ; current Y coordinate (renamed)
+define      CUR_Y       $21     ; (renamed)
+
+; New variable for second number (subtrahend)
+; Using a free zero-page location ($1E)
+define      SUB_NUM     $1E     ; holds second number for subtraction
+
+; Temporary storage for swapping (if needed)
+define      TEMP_BCD    $1F     ; temporary storage for swapping numbers
 
 ; =================== Absolute Variable Definitions ===================
 ; Original: define      GETNUM_1    $0080
 ;define      GETNUM_1    $0080
-define      NUM1_BUF    $0080   ; buffer for first digit (renamed)
+define      NUM1_BUF    $0080   ; (renamed)
 
 ; Original: define      GETNUM_2    $0081
 ;define      GETNUM_2    $0081
-define      NUM2_BUF    $0081   ; buffer for second digit (renamed)
+define      NUM2_BUF    $0081   ; (renamed)
 
 ; =================== Initialization and Setup ===================
-; Set image dimensions (width and height)
 LDA #$05                    
-STA $12         ; set image width to 5 pixels (unchanged)
-STA $13         ; set image height to 5 pixels (unchanged)
+STA $12         ; image width = 5 pixels
+STA $13         ; image height = 5 pixels
 
-; Set starting cursor position
 LDA #$01                    
 ; Original: STA XPOS
 ;STA XPOS
-STA CUR_X       ; use CUR_X instead of XPOS (changed)
+STA CUR_X       ; (changed)
 ; Original: STA YPOS
 ;STA YPOS
-STA CUR_Y       ; use CUR_Y instead of YPOS (changed)
+STA CUR_Y       ; (changed)
 
-; Clear screen and print banner
-JSR CLEAR_SCREEN   ; changed from SCINIT
-JSR GET_CHAR       ; changed from CHRIN (pause/wait for key)
-JSR PRINT_STR      ; will call our modified PRINT subroutine
-; Original: dcb "C","a","l","c","u","l","a","t","o","r",00
-dcb "C","a","l","c","u","l","a","t","o","r",00  ; same banner
+JSR CLEAR_SCREEN   ; call CLEAR_SCREEN (was SCINIT)
+JSR GET_CHAR       ; pause for a key (was CHRIN)
+JSR PRINT_STR      ; print the banner string (modified PRINT subroutine)
+dcb "C","a","l","c","u","l","a","t","o","r",00  ; banner remains the same
 
-; =================== Main Routine: ADDNUMBERS ===================
-ADDNUMBERS:
-    ; --- Prompt for the first number ---
+; =================== Main Routine: SUBTRACTNUMBERS ===================
+; Changed label from ADDNUMBERS to SUBTRACTNUMBERS and functionality from addition to subtraction.
+SUBTRACTNUMBERS:
+    ; --- Prompt for first number ---
     JSR PRINT_STR
-    ; Original prompt lines combined below:
-    ; dcb $0d,$0d,"E","n","t","e","r",32,"a",32,"n","u","m","b","e","r"
-    ; dcb "(","0","-","9","9",")",":"
-    ; dcb 32,32,32,32,32,32,32,32,00
-    dcb $0D,$0D,"E","n","t","e","r",32,"a",32,"n","u","m","b","e","r","(","0","-","9","9",")",":",32,00  ; changed: combined prompt
-
+    ; Original prompt combined, now:
+    dcb $0D,$0D,"E","n","t","e","r",32,"f","i","r","s","t",32,"n","u","m","b","e","r",":",32,00  ; (modified prompt)
+    
     LDA #$00                    
     ; Original: STA value_h
     ;STA value_h
-    STA SUM_H       ; clear hundreds digit (changed)
-    JSR GET_NUMBER  ; changed from GETNUM; get first number from user
-    ; Original: STA value
-    ;STA value
-    STA SUM_BCD     ; store first number in SUM_BCD (changed)
+    STA SUM_H       ; clear hundreds digit (renamed)
+    JSR GET_NUMBER  ; get first number (modified subroutine, renamed GET_NUMBER)
+    STA SUM_BCD     ; store first number in SUM_BCD
 
-    ; --- Prompt for the second number ---
+    ; --- Prompt for second number ---
     JSR PRINT_STR
-    dcb "E","n","t","e","r",32,"a","n","o","t","h","e","r",32,"n","u","m","b","e","r","(","0","-","9","9",")",":",32,00  ; changed prompt text
-    JSR GET_NUMBER  ; get second number; result returned in accumulator
+    dcb "E","n","t","e","r",32,"s","e","c","o","n","d",32,"n","u","m","b","e","r",":",32,00  ; (modified prompt)
+    JSR GET_NUMBER  ; get second number; result in A
+    STA SUB_NUM     ; store second number in SUB_NUM
 
-    ; --- Perform BCD Addition ---
+    ; --- Compare and swap if necessary ---
+    LDA SUM_BCD
+    CMP SUB_NUM
+    BCS DO_SUB      ; if first number >= second, continue subtraction
+    ; Otherwise, display minus sign and swap the numbers:
+    LDA #$2D       ; ASCII '-' is $2D
+    JSR PUT_CHAR
+    LDA SUM_BCD    ; save original first number in TEMP_BCD
+    STA TEMP_BCD
+    LDA SUB_NUM    ; move second number into SUM_BCD
+    STA SUM_BCD
+    LDA TEMP_BCD   ; move original first number into SUB_NUM
+    STA SUB_NUM
+
+DO_SUB:
+    ; --- Perform BCD Subtraction ---
     SED             ; set decimal mode
     CLC             ; clear carry flag
-    ADC SUM_BCD     ; add second number to first number in accumulator
+    SBC SUB_NUM     ; subtract SUB_NUM from SUM_BCD
     CLD             ; clear decimal mode
-    STA SUM_BCD     ; store sum in SUM_BCD
-    BCC SKIP_HUNDREDS  ; branch if no carry (i.e. no hundreds digit)
-    INC SUM_H       ; increment hundreds digit if carry occurred
-SKIP_HUNDREDS:
+    STA SUM_BCD     ; store the result
 
-    ; --- Display Result ---
-    ; Save accumulator on stack for later restoration
+    ; --- Display the Result ---
     PHA
     JSR PRINT_STR
-    ; Original: dcb "R","e","s","u","l","t",":",32 ... (many spaces)
-    dcb "R","e","s","u","l","t",":",32,32,32,32,32,32,32,32,32,32,00  ; changed: shorter spacing but same idea
+    dcb "R","e","s","u","l","t",":",32,32,32,32,32,00  ; modified prompt with fewer spaces
 
     ; --- Process Hundreds Digit (if any) ---
     LDA SUM_H
-    BEQ PROCESS_TENS    ; if no hundreds digit, jump to tens
+    BEQ PROC_TENS   ; if hundreds digit is zero, skip it
     AND #$0F
     ORA #$30
-    JSR PUT_CHAR        ; output hundreds digit character
+    JSR PUT_CHAR
 
-    JSR UPDATE_GFX      ; update pointer for digit graphic
-    LDA #$10            
-    LDX CUR_X          ; use CUR_X (changed)
-    LDY CUR_Y          ; use CUR_Y (changed)
-    JSR DRAW_IMAGE     ; call modified DRAW subroutine (renamed)
+    JSR UPDATE_GFX  ; update graphic pointer for this digit
+    LDA #$10
+    LDX CUR_X
+    LDY CUR_Y
+    JSR DRAW_IMAGE  ; draw hundreds digit graphic
     LDA CUR_X
     CLC
-    ADC #$06           ; move drawing cursor right by 6 pixels
+    ADC #$06
     STA CUR_X
-    JMP PROCESS_TENS
+    JMP PROC_TENS
 
     ; --- Process Tens Digit ---
-PROCESS_TENS:
+PROC_TENS:
     LDA SUM_BCD
-    AND #$F0           ; extract tens digit (upper nibble)
-    BEQ PROCESS_ONES  ; if tens digit is zero, skip to ones
+    AND #$F0       ; extract tens digit
+    BEQ PROC_ONES  ; if zero, skip to ones digit
 
-    ; Process tens digit: shift to lower nibble and output
     LDA SUM_BCD
     LSR
     LSR
@@ -153,28 +154,28 @@ PROCESS_TENS:
     ORA #$30
     JSR PUT_CHAR
 
-    JSR UPDATE_GFX      ; update graphic pointer for tens digit
+    JSR UPDATE_GFX  ; update graphic pointer for tens digit
     LDA #$10
     LDX CUR_X
     LDY CUR_Y
-    JSR DRAW_IMAGE     ; draw tens digit graphic
+    JSR DRAW_IMAGE
     LDA CUR_X
     CLC
     ADC #$06
     STA CUR_X
 
     ; --- Process Ones Digit ---
-PROCESS_ONES:
+PROC_ONES:
     LDA SUM_BCD
-    AND #$0F           ; extract ones digit (lower nibble)
+    AND #$0F       ; extract ones digit
     ORA #$30
     JSR PUT_CHAR
 
-    JSR UPDATE_GFX      ; update graphic pointer for ones digit
+    JSR UPDATE_GFX  ; update graphic pointer for ones digit
     LDA #$10
     LDX CUR_X
     LDY CUR_Y
-    JSR DRAW_IMAGE     ; draw ones digit graphic
+    JSR DRAW_IMAGE
     LDA CUR_X
     CLC
     ADC #$06
@@ -183,52 +184,28 @@ PROCESS_ONES:
     RTS
 
 ; =================== Subroutine: DRAW_IMAGE ===================
-; Original label: DRAW
-; Changed label to DRAW_IMAGE and variable names
-; Entry:
-;   A  - pointer to image data structure in zero page (address, width, height)
-;   X  - horizontal coordinate (CUR_X)
-;   Y  - vertical coordinate (CUR_Y)
-; Exit: All registers undefined
-
-; Zero-page variables for drawing (renamed):
-; Original: define IMGPTR    $A0
-;define IMGPTR    $A0
-define      IMG_PTR    $A0   ; changed: IMG_PTR instead of IMGPTR
-; Original: define IMGPTRH   $A1
-;define IMGPTRH   $A1
-define      IMG_PTR_H  $A1   ; changed: IMG_PTR_H instead of IMGPTRH
-; Original: define IMGWIDTH  $A2
-;define IMGWIDTH  $A2
-define      IMG_W      $A2   ; changed: IMG_W instead of IMGWIDTH
-; Original: define IMGHEIGHT $A3
-;define IMGHEIGHT $A3
-define      IMG_H      $A3   ; changed: IMG_H instead of IMGHEIGHT
-; Original: define SCRPTR    $A4
-;define SCRPTR    $A4
-define      SCR_PTR    $A4   ; changed: SCR_PTR instead of SCRPTR
-; Original: define SCRPTRH   $A5
-;define SCRPTRH   $A5
-define      SCR_PTR_H  $A5   ; changed: SCR_PTR_H instead of SCRPTRH
-; Original: define SCRX      $A6
-;define SCRX      $A6
-define      SCR_X      $A6   ; changed: SCR_X instead of SCRX
-; Original: define SCRY      $A7
-;define SCRY      $A7
-define      SCR_Y      $A7   ; changed: SCR_Y instead of SCRY
+; (Renamed from DRAW, as in previous modifications)
+define      IMG_PTR    $A0   ; (was IMGPTR)
+define      IMG_PTR_H  $A1   ; (was IMGPTRH)
+define      IMG_W      $A2   ; (was IMGWIDTH)
+define      IMG_H      $A3   ; (was IMGHEIGHT)
+define      SCR_PTR    $A4   ; (was SCRPTR)
+define      SCR_PTR_H  $A5   ; (was SCRPTRH)
+define      SCR_X      $A6   ; (was SCRX)
+define      SCR_Y      $A7   ; (was SCRY)
 
 DRAW_IMAGE:
-    STY SCR_Y         ; save current Y coordinate
-    STX SCR_X         ; save current X coordinate
+    STY SCR_Y
+    STX SCR_X
 
     TAY
-    LDA $0006,Y       ; load low byte of image pointer
-    STA IMG_PTR       ; store in IMG_PTR (changed)
-    LDA $0007,Y       ; load high byte of image pointer
-    STA IMG_PTR_H     ; store in IMG_PTR_H (changed)
-    LDA $0002,Y       ; load image width
+    LDA $0006,Y
+    STA IMG_PTR
+    LDA $0007,Y
+    STA IMG_PTR_H
+    LDA $0002,Y
     STA IMG_W
-    LDA $0003,Y       ; load image height
+    LDA $0003,Y
     STA IMG_H
 
     ; Calculate screen address: $0200 + SCR_X + (SCR_Y * 32)
@@ -236,14 +213,13 @@ DRAW_IMAGE:
     STA SCR_PTR_H
     LDA SCR_Y
     STA SCR_PTR
-    LDY #$05          ; 5 left shifts to multiply by 32
+    LDY #$05
 SHIFT_LOOP:
     ASL SCR_PTR
     ROL SCR_PTR_H
     DEY
     BNE SHIFT_LOOP
 
-    ; Add SCR_X to the computed offset
     LDA SCR_X
     CLC
     ADC SCR_PTR
@@ -252,13 +228,12 @@ SHIFT_LOOP:
     ADC SCR_PTR_H
     STA SCR_PTR_H
 
-    ; Add base screen address $0200 (only high byte is affected)
     LDA #$02
     CLC
     ADC SCR_PTR_H
     STA SCR_PTR_H
 
-    ; Copy image data row by row from the image pointer to screen memory
+    ; Copy image data row by row
 ROW_COPY:
     LDY #$00
 ROW_LOOP:
@@ -268,7 +243,6 @@ ROW_LOOP:
     CPY IMG_W
     BNE ROW_LOOP
 
-    ; Advance image data pointer to next row
     LDA IMG_W
     CLC
     ADC IMG_PTR
@@ -277,7 +251,6 @@ ROW_LOOP:
     ADC IMG_PTR_H
     STA IMG_PTR_H
 
-    ; Advance screen pointer by one row (32 bytes)
     LDA #32
     CLC
     ADC SCR_PTR
@@ -292,12 +265,12 @@ ROW_LOOP:
     RTS
 
 ; =================== Subroutine: PRINT_STR ===================
-; Renamed from PRINT; prints a null-terminated string
+; (Renamed from PRINT)
 PRINT_STR:
     PLA
     CLC
     ADC #$01
-    STA PRNT_PTR      ; changed pointer name
+    STA PRNT_PTR
     PLA
     STA PRNT_PTR_H
     TYA
@@ -306,7 +279,7 @@ PRINT_STR:
 PRINT_LOOP:
     LDA (PRNT_PTR),Y
     BEQ STR_DONE
-    JSR PUT_CHAR     ; use PUT_CHAR instead of CHROUT
+    JSR PUT_CHAR
     INY
     JMP PRINT_LOOP
 STR_DONE:
@@ -326,31 +299,31 @@ STR_DONE:
     RTS
 
 ; =================== Subroutine: GET_NUMBER ===================
-; Renamed from GETNUM; reads a 2-digit number and returns a BCD in A
+; (Renamed from GETNUM)
 GET_NUMBER:
     TXA
     PHA
     TYA
     PHA
     LDX #$00
-    STX NUM1_BUF    ; use NUM1_BUF (changed)
-    STX NUM2_BUF    ; use NUM2_BUF (changed)
+    STX NUM1_BUF
+    STX NUM2_BUF
 NUM_CURSOR:
-    LDA #$A0       ; display black square as cursor background
+    LDA #$A0       ; black square for cursor background
     JSR PUT_CHAR
-    LDA #$83       ; display left cursor symbol
+    LDA #$83       ; left cursor symbol
     JSR PUT_CHAR
 GET_KEY:
-    JSR GET_CHAR   ; wait for a key press
+    JSR GET_CHAR
     CMP #$00
     BEQ GET_KEY
-    CMP #$08       ; BACKSPACE?
+    CMP #$08      ; BACKSPACE
     BEQ NUM_BACKSPACE
-    CMP #$0D       ; ENTER?
+    CMP #$0D      ; ENTER
     BEQ NUM_ENTER
-    CMP #$30       ; valid digit starts at '0'
+    CMP #$30
     BMI GET_KEY
-    CMP #$3A       ; up to '9'
+    CMP #$3A
     BMI NUM_DIGIT
     JMP GET_KEY
 NUM_ENTER:
@@ -366,8 +339,8 @@ NUM_ENTER:
     ASL
     ASL
     ASL
-    ASL            ; shift left 4 bits (multiply by 16)
-    ORA NUM2_BUF   ; combine digits into BCD
+    ASL
+    ORA NUM2_BUF
 NUM_DONE:
     STA NUM1_BUF
     PLA
@@ -377,7 +350,7 @@ NUM_DONE:
     LDA NUM1_BUF
     RTS
 NUM_DIGIT:
-    CPX #$02       ; allow only 2 digits
+    CPX #$02
     BPL GET_KEY
     PHA
     JSR PUT_CHAR
@@ -404,9 +377,9 @@ NUM_BACKSPACE:
     JMP NUM_CURSOR
 
 ; =================== Subroutine: UPDATE_GFX ===================
-; Renamed from update_value; sets pointer for 5x5 graphic for a digit
+; (Renamed from update_value, with internal labels renamed)
 UPDATE_GFX:
-    CMP #$31        ; compare with ASCII '0'
+    CMP #$31       ; compare with ASCII '0'
     BMI SET_GFX_0
     CMP #$32
     BMI SET_GFX_1
@@ -489,8 +462,6 @@ SET_GFX_9:
     RTS
 
 ; =================== Image Data Definitions ===================
-; The following blocks define 5x5 pixel images for digits and other symbols.
-
 G_O:
     DCB $11,$11,$11,$11,$11
     DCB $11,$00,$00,$00,$11
