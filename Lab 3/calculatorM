@@ -1,0 +1,562 @@
+; =================== ROM Routine Definitions ===================
+define      CLEAR_SCREEN $ff81   ; initialize/clear screen
+define      GET_CHAR    $ffcf   ; input character from keyboard
+define      PUT_CHAR    $ffd2   ; output character to screen
+define      SCREEN      $ffed   ; get screen size
+define      PLOT        $fff0   ; get/set cursor coordinates
+
+; =================== Zero‑Page Variable Definitions ===================
+define      PRNT_PTR    $10   ; string pointer low byte
+define      PRNT_PTR_H  $11   ; string pointer high byte
+define      IMG_WIDTH   $12   ; width of number graphics
+define      IMG_HEIGHT  $13   ; height of number graphics
+define      NUM1_BCD    $14   ; first operand (BCD format)
+define      NUM1_H      $15   ; hundreds digit for first operand
+define      OP_CODE     $16   ; operation code (1=add, 2=sub, 3=mul, 4=div)
+define      NUM2_BCD    $17   ; second operand (BCD format)
+define      RESULT_BCD  $18   ; result low byte (BCD format)
+define      RESULT_H    $19   ; result high byte (BCD format)
+define      CUR_X       $20   ; cursor X position
+define      CUR_Y       $21   ; cursor Y position
+define      TEMP_BCD    $22   ; temporary storage
+define      MULT_COUNT  $23   ; counter for multiplication
+define      ERROR_FLAG  $24   ; error flag (1=error)
+define      MEMORY_VAL  $25   ; memory storage value
+define      GPTR_LO     $26   ; graphics pointer low byte 
+define      GPTR_HI     $27   ; graphics pointer high byte
+
+; =================== Absolute Variable Definitions ===================
+define      NUM1_BUF    $0080   ; buffer for first digit entry
+define      NUM2_BUF    $0081   ; buffer for second digit entry
+
+; =================== Initialization and Setup ===================
+START:
+    LDA #$05                
+    STA IMG_WIDTH     ; image width = 5 pixels
+    STA IMG_HEIGHT    ; image height = 5 pixels
+    
+    LDA #$01
+    STA CUR_X         ; initialize cursor X position
+    STA CUR_Y         ; initialize cursor Y position
+    
+    JSR CLEAR_SCREEN  ; clear the screen
+    JSR DRAW_BANNER   ; draw calculator banner
+    JSR INIT_MEMORY   ; initialize memory value to 0
+
+; =================== Main Program Loop ===================
+MAIN_LOOP:
+    JSR DISPLAY_MENU   ; display the operation menu
+    JSR GET_OPERATION  ; get operation selection
+    
+    LDA OP_CODE
+    CMP #$05           ; check if operation is "M+" (5)
+    BEQ DO_MEMORY_ADD
+    
+    CMP #$06           ; check if operation is "MR" (6)
+    BEQ DO_MEMORY_RECALL
+    
+    CMP #$07           ; check if operation is "MC" (7)
+    BEQ DO_MEMORY_CLEAR
+    
+    CMP #$08           ; check if operation is "Exit" (8)
+    BEQ EXIT_PROGRAM
+    
+    ; For other operations, get the numbers and perform calculation
+    JSR GET_NUMBERS
+    JSR CALCULATE
+    JSR DISPLAY_RESULT
+    JMP MAIN_LOOP
+
+EXIT_PROGRAM:
+    JSR PRINT_STR
+    dcb $0D,"E","x","i","t","i","n","g"," ","p","r","o","g","r","a","m",".",0
+    RTS
+
+; =================== Display Calculator Banner ===================
+DRAW_BANNER:
+    JSR PRINT_STR
+    dcb $0D,$0D
+    dcb "====================",$0D
+    dcb "| 6502 Calculator  |",$0D
+    dcb "| Multi-Operation  |",$0D
+    dcb "====================",$0D,$0D,0
+    RTS
+
+; =================== Initialize Memory ===================
+INIT_MEMORY:
+    LDA #$00
+    STA MEMORY_VAL
+    RTS
+
+; =================== Display Operation Menu ===================
+DISPLAY_MENU:
+    JSR PRINT_STR
+    dcb $0D,$0D
+    dcb "Select operation:",$0D
+    dcb "1) Addition",$0D
+    dcb "2) Subtraction",$0D
+    dcb "3) Multiplication",$0D
+    dcb "4) Division",$0D
+    dcb "5) Memory Add (M+)",$0D
+    dcb "6) Memory Recall (MR)",$0D
+    dcb "7) Memory Clear (MC)",$0D
+    dcb "8) Exit",$0D
+    dcb "Choice: ",0
+    RTS
+
+; =================== Get Operation Selection ===================
+GET_OPERATION:
+    JSR GET_CHAR       ; get key press
+    CMP #$31           ; compare with '1'
+    BMI GET_OPERATION  ; if less, invalid input
+    CMP #$39           ; compare with '9'
+    BPL GET_OPERATION  ; if greater or equal, invalid
+    
+    PHA                ; save the key value
+    JSR PUT_CHAR       ; echo the key
+    PLA                ; restore the key value
+    
+    SEC
+    SBC #$30           ; convert ASCII to binary
+    STA OP_CODE        ; save operation code
+    
+    LDA #$0D           ; carriage return
+    JSR PUT_CHAR
+    RTS
+
+; =================== Get Input Numbers ===================
+GET_NUMBERS:
+    ; Get first number
+    JSR PRINT_STR
+    dcb $0D,"Enter first number (0-99): ",0
+    
+    LDA #$00
+    STA NUM1_H         ; clear hundreds digit
+    JSR GET_NUMBER     ; get first number
+    STA NUM1_BCD       ; store first number
+    
+    ; Get second number if not using memory operations
+    LDA OP_CODE
+    CMP #$05           ; if operation >= 5, skip second number
+    BPL SKIP_SECOND
+    
+    JSR PRINT_STR
+    dcb $0D,"Enter second number (0-99): ",0
+    JSR GET_NUMBER     ; get second number
+    STA NUM2_BCD       ; store second number
+    
+SKIP_SECOND:
+    RTS
+
+; =================== Memory Operations ===================
+DO_MEMORY_ADD:
+    ; Add the number to memory
+    LDA NUM1_BCD
+    CLC
+    ADC MEMORY_VAL
+    STA MEMORY_VAL
+    
+    JSR PRINT_STR
+    dcb $0D,"Value added to memory.",$0D,0
+    JMP MAIN_LOOP
+
+DO_MEMORY_RECALL:
+    ; Recall value from memory
+    LDA MEMORY_VAL
+    STA RESULT_BCD
+    
+    JSR PRINT_STR
+    dcb $0D,"Memory value: ",0
+    
+    LDA MEMORY_VAL
+    JSR DISPLAY_BCD
+    
+    JSR PRINT_STR
+    dcb $0D,0
+    JMP MAIN_LOOP
+
+DO_MEMORY_CLEAR:
+    ; Clear memory
+    LDA #$00
+    STA MEMORY_VAL
+    
+    JSR PRINT_STR
+    dcb $0D,"Memory cleared.",$0D,0
+    JMP MAIN_LOOP
+
+; =================== Calculate Result Based on Operation ===================
+CALCULATE:
+    LDA #$00
+    STA ERROR_FLAG     ; clear error flag
+    
+    LDA OP_CODE
+    CMP #$01
+    BEQ DO_ADDITION
+    CMP #$02
+    BEQ DO_SUBTRACTION
+    CMP #$03
+    BEQ DO_MULTIPLICATION
+    CMP #$04
+    BEQ DO_DIVISION
+    
+    ; Should never reach here due to earlier checks
+    RTS
+
+; =================== Addition Operation ===================
+DO_ADDITION:
+    SED                ; set decimal mode
+    CLC                ; clear carry
+    LDA NUM1_BCD
+    ADC NUM2_BCD
+    STA RESULT_BCD
+    
+    LDA NUM1_H
+    ADC #$00           ; add carry
+    STA RESULT_H
+    CLD                ; clear decimal
+    RTS
+
+; =================== Subtraction Operation ===================
+DO_SUBTRACTION:
+    ; Compare numbers to determine if result will be negative
+    LDA NUM1_BCD
+    CMP NUM2_BCD
+    BCS SUB_POSITIVE   ; if NUM1 >= NUM2, result positive
+    
+    ; Result will be negative
+    LDA #$01
+    STA ERROR_FLAG     ; set negative flag
+    
+    ; Swap numbers for proper subtraction
+    LDA NUM2_BCD
+    STA TEMP_BCD
+    LDA NUM1_BCD
+    STA NUM2_BCD
+    LDA TEMP_BCD
+    STA NUM1_BCD
+    
+SUB_POSITIVE:
+    SED                ; set decimal mode
+    SEC                ; set carry for subtraction
+    LDA NUM1_BCD
+    SBC NUM2_BCD
+    STA RESULT_BCD
+    
+    LDA NUM1_H
+    SBC #$00
+    STA RESULT_H
+    CLD                ; clear decimal
+    RTS
+
+; =================== Multiplication Operation ===================
+DO_MULTIPLICATION:
+    LDA #$00
+    STA RESULT_BCD     ; clear result
+    STA RESULT_H
+    
+    LDA NUM2_BCD       ; get multiplier
+    STA MULT_COUNT
+    
+    ; Simple multiplication by repeated addition
+MULT_LOOP:
+    LDA MULT_COUNT
+    BEQ MULT_DONE      ; if count is zero, we're done
+    
+    SED                ; set decimal mode
+    SEC                ; prepare for subtraction
+    LDA MULT_COUNT
+    SBC #$01           ; decrement counter
+    STA MULT_COUNT
+    
+    ; Add NUM1 to result
+    CLC
+    LDA RESULT_BCD
+    ADC NUM1_BCD
+    STA RESULT_BCD
+    
+    LDA RESULT_H
+    ADC #$00           ; add carry
+    STA RESULT_H
+    CLD                ; clear decimal mode
+    
+    ; Check if result > 99
+    LDA RESULT_H
+    BEQ MULT_CONTINUE  ; if zero, continue
+    
+    ; Result too large
+    LDA #$02
+    STA ERROR_FLAG     ; set overflow error
+    JMP MULT_DONE
+    
+MULT_CONTINUE:
+    JMP MULT_LOOP
+    
+MULT_DONE:
+    RTS
+
+; =================== Division Operation ===================
+DO_DIVISION:
+    ; Check for division by zero
+    LDA NUM2_BCD
+    BNE DIV_NONZERO
+    
+    ; Division by zero error
+    LDA #$03
+    STA ERROR_FLAG
+    RTS
+    
+DIV_NONZERO:
+    LDA #$00
+    STA RESULT_BCD     ; clear result
+    LDA NUM1_BCD
+    STA TEMP_BCD       ; copy dividend to temp
+    
+    ; Simple division by repeated subtraction
+DIV_LOOP:
+    ; Compare remainder to divisor
+    LDA TEMP_BCD
+    CMP NUM2_BCD
+    BMI DIV_DONE       ; if less than divisor, we're done
+    
+    ; Subtract divisor from remainder
+    SED                ; set decimal mode
+    SEC                ; set carry for subtraction
+    LDA TEMP_BCD
+    SBC NUM2_BCD
+    STA TEMP_BCD
+    
+    ; Increment result
+    CLC
+    LDA RESULT_BCD
+    ADC #$01
+    STA RESULT_BCD
+    CLD                ; clear decimal mode
+    
+    JMP DIV_LOOP
+    
+DIV_DONE:
+    RTS
+
+; =================== Display Calculation Result ===================
+DISPLAY_RESULT:
+    JSR PRINT_STR
+    dcb $0D,"Result: ",0
+    
+    ; Check for errors
+    LDA ERROR_FLAG
+    BEQ DISPLAY_NORMAL
+    
+    CMP #$01
+    BEQ DISPLAY_NEGATIVE
+    CMP #$02
+    BEQ DISPLAY_OVERFLOW
+    CMP #$03
+    BEQ DISPLAY_DIV_ZERO
+    
+    JMP DISPLAY_END
+    
+DISPLAY_NEGATIVE:
+    ; Display negative sign
+    LDA #$2D           ; ASCII '-'
+    JSR PUT_CHAR
+    
+DISPLAY_NORMAL:
+    ; Display the result
+    LDA RESULT_BCD
+    JSR DISPLAY_BCD
+    JMP DISPLAY_END
+    
+DISPLAY_OVERFLOW:
+    JSR PRINT_STR
+    dcb "Overflow Error",0
+    JMP DISPLAY_END
+    
+DISPLAY_DIV_ZERO:
+    JSR PRINT_STR
+    dcb "Division by Zero",0
+    
+DISPLAY_END:
+    JSR PRINT_STR
+    dcb $0D,0
+    RTS
+
+; =================== Display BCD Number ===================
+DISPLAY_BCD:
+    PHA                ; save number
+    
+    ; Check for hundreds digit
+    LDA RESULT_H
+    BEQ CHECK_TENS     ; if zero, check tens
+    
+    AND #$0F
+    ORA #$30           ; convert to ASCII
+    JSR PUT_CHAR       ; display hundreds digit
+    
+CHECK_TENS:
+    ; Display tens digit
+    PLA                ; restore number
+    PHA                ; save it again
+    
+    AND #$F0           ; isolate tens digit
+    BEQ MAYBE_LEADING_ZERO ; if zero, might be leading zero
+    
+    ; Has tens digit
+    LSR
+    LSR
+    LSR
+    LSR                ; shift right 4 times
+    ORA #$30           ; convert to ASCII
+    JSR PUT_CHAR       ; display tens digit
+    JMP DISPLAY_ONES
+    
+MAYBE_LEADING_ZERO:
+    ; Skip leading zero unless result is 0
+    LDA RESULT_H
+    BNE DISPLAY_ONES   ; if hundreds exist, skip leading zero
+    
+    PLA                ; get number
+    PHA                ; save again
+    AND #$0F           ; check if ones digit is zero
+    BNE DISPLAY_ZERO   ; if not, need to display a leading zero
+    JMP DISPLAY_ONES   ; otherwise, just display ones digit
+    
+DISPLAY_ZERO:
+    ; Need to display leading zero
+    LDA #$30           ; ASCII '0'
+    JSR PUT_CHAR
+    
+DISPLAY_ONES:
+    ; Display ones digit
+    PLA                ; restore number
+    AND #$0F           ; isolate ones digit
+    ORA #$30           ; convert to ASCII
+    JSR PUT_CHAR       ; display ones digit
+    RTS
+
+; =================== Subroutine: PRINT_STR ===================
+PRINT_STR:
+    PLA
+    CLC
+    ADC #$01
+    STA PRNT_PTR
+    PLA
+    STA PRNT_PTR_H
+    TYA
+    PHA
+    LDY #$00
+PRINT_LOOP:
+    LDA (PRNT_PTR),Y
+    BEQ STR_DONE
+    JSR PUT_CHAR
+    INY
+    JMP PRINT_LOOP
+STR_DONE:
+    TYA
+    CLC
+    ADC PRNT_PTR
+    STA PRNT_PTR
+    LDA PRNT_PTR_H
+    ADC #$00
+    STA PRNT_PTR_H
+    PLA
+    TAY
+    LDA PRNT_PTR_H
+    PHA
+    LDA PRNT_PTR
+    PHA
+    RTS
+
+; =================== Subroutine: GET_NUMBER ===================
+GET_NUMBER:
+    TXA
+    PHA
+    TYA
+    PHA
+    LDX #$00
+    STX NUM1_BUF
+    STX NUM2_BUF
+NUM_CURSOR:
+    LDA #$A0           ; black square for cursor
+    JSR PUT_CHAR
+    LDA #$83           ; left cursor
+    JSR PUT_CHAR
+GET_KEY:
+    JSR GET_CHAR
+    CMP #$00
+    BEQ GET_KEY
+    CMP #$08           ; BACKSPACE
+    BEQ NUM_BACKSPACE
+    CMP #$0D           ; ENTER
+    BEQ NUM_ENTER
+    CMP #$30           ; '0'
+    BMI GET_KEY        ; if less, invalid
+    CMP #$3A           ; '9'+1
+    BPL GET_KEY        ; if greater or equal, invalid
+    ; Valid digit
+    CPX #$02
+    BPL GET_KEY        ; if already have 2 digits, ignore
+    PHA                ; save digit
+    JSR PUT_CHAR       ; echo digit
+    PLA                ; restore digit
+    AND #$0F           ; convert to binary
+    STA NUM1_BUF,X     ; store in buffer
+    INX                ; increment count
+    JMP NUM_CURSOR
+NUM_ENTER:
+    CPX #$00
+    BEQ GET_KEY        ; if no digits entered, wait
+    LDA #$20           ; space
+    JSR PUT_CHAR
+    LDA #$0D           ; carriage return
+    JSR PUT_CHAR
+    LDA NUM1_BUF
+    CPX #$01
+    BEQ NUM_DONE       ; if only one digit, we're done
+    ; Two digits entered
+    ASL
+    ASL
+    ASL
+    ASL                ; shift left 4 times (multiply by 16)
+    ORA NUM2_BUF       ; combine with second digit
+NUM_DONE:
+    STA NUM1_BUF       ; store result
+    PLA
+    TAY
+    PLA
+    TAX
+    LDA NUM1_BUF       ; return result in A
+    RTS
+NUM_BACKSPACE:
+    CPX #$00
+    BEQ GET_KEY        ; if no digits, ignore
+    LDA #$20           ; space
+    JSR PUT_CHAR
+    LDA #$83           ; left cursor
+    JSR PUT_CHAR
+    JSR PUT_CHAR
+    LDA #$20           ; space
+    JSR PUT_CHAR
+    LDA #$83           ; left cursor
+    JSR PUT_CHAR
+    DEX                ; decrement count
+    LDA #$00
+    STA NUM1_BUF,X     ; clear digit
+    JMP NUM_CURSOR
+
+; =================== Number Graphics Data ===================
+; Graphics for digits 0-9 follow the same format as the original code
+N_0:
+    DCB $00,$11,$11,$11,$00
+    DCB $11,$00,$00,$00,$11
+    DCB $11,$00,$00,$00,$11
+    DCB $11,$00,$00,$00,$11
+    DCB $00,$11,$11,$11,$00
+
+N_1:
+    DCB $00,$11,$11,$00,$00
+    DCB $11,$00,$11,$00,$00
+    DCB $11,$00,$11,$00,$00
+    DCB $00,$00,$11,$00,$00
+    DCB $11,$11,$11,$11,$11
+
+; ... (other digit graphics would go here)
