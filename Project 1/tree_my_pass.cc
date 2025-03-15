@@ -68,4 +68,4 @@ gimple_opt_pass *make_tree_my_pass(gcc::context *ctxt) {
     return new my_pass(ctxt);
 }
 
-} // end anonymous namespace
+} 
