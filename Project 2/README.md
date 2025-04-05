@@ -8,3 +8,4 @@ Compare the GIMPLE representations of original and cloned functions.
 Ignore superficial differences (SSA identifiers, labels, basic block numbering).
 Output the decision: either PRUNE: function or NOPRUNE: function.
 
+https://software-portability-and-optimization.hashnode.dev/project-stage-2-initialised
