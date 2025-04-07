@@ -1,33 +1,54 @@
-include <unordered_map>
+/*  tree-my-pass.cc – counts BBs and GIMPLE stmts for every function  */
 
-static std::unordered_map<std::string, std::string> function_signatures;
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "backend.h"
+#undef  optimize                         // avoid options.h macro
 
-std::string generate_signature(function *fun) {
-    std::hash<std::string> hasher;
-    size_t combined_hash = 0;
-    basic_block bb;
-    FOR_EACH_BB_FN(bb, fun) {
-        for (gimple_stmt_iterator gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
-            gimple *stmt = gsi_stmt(gsi);
-            combined_hash ^= hasher(gimple_code_name[gimple_code(stmt)]) + 0x9e3779b9 + (combined_hash << 6) + (combined_hash >> 2);
+#include "tree-pass.h"
+#include "context.h"
+
+#include "tree.h"
+#include "tree-core.h"
+#include "basic-block.h"
+#include "gimple.h"
+#include "gimple-iterator.h"
+
+namespace {
+
+const pass_data my_pass_data = {
+    GIMPLE_PASS,
+    "tree-my-pass",          // -fdump-tree-my-pass
+    OPTGROUP_NONE, TV_TREE_OPS,
+    0, 0, 0,                  // props required / provided / destroyed
+    0,                        // todo_flags_start
+    0                         // todo_flags_finish  (field 9!)
+};
+
+class my_pass : public gimple_opt_pass {
+public:
+    my_pass (gcc::context *ctxt) : gimple_opt_pass (my_pass_data, ctxt) {}
+
+    bool gate (function *) override { return true; }
+
+    unsigned int execute (function *fun) override {
+        fprintf (stderr, "Processing function: %s\n", function_name (fun));
+        int bb_cnt = 0, stmt_cnt = 0;
+        basic_block bb;
+        FOR_EACH_BB_FN (bb, fun) {
+            ++bb_cnt;
+            for (gimple_stmt_iterator gsi = gsi_start_bb (bb);
+                 !gsi_end_p (gsi); gsi_next (&gsi))
+                ++stmt_cnt;
         }
-    }
-    return std::to_string(combined_hash);
-}
-
-unsigned int pass_ctyler::execute(function *fun) {
-    if (!fun || !dump_file) 
+        fprintf (stderr, "  Basic blocks : %d\n", bb_cnt);
+        fprintf (stderr, "  GIMPLE stmts : %d\n\n", stmt_cnt);
         return 0;
-
-    std::string func_name = IDENTIFIER_POINTER(DECL_NAME(fun->decl));
-    std::string signature = generate_signature(fun);
-
-    if (function_signatures.find(signature) != function_signatures.end()) {
-        fprintf(dump_file, "PRUNE: %s (Duplicate of %s)\n", func_name.c_str(), function_signatures[signature].c_str());
-    } else {
-        function_signatures[signature] = func_name;
-        fprintf(dump_file, "NOPRUNE: %s\n", func_name.c_str());
     }
+};
 
-    return 0;
-}
+} // anon
+
+gimple_opt_pass *make_tree_my_pass (gcc::context *ctxt)
+{ return new my_pass (ctxt); }
