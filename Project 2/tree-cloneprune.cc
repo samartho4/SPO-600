@@ -1,14 +1,11 @@
 /*  tree-cloneprune.cc – emits PRUNE / NOPRUNE for function clones  */
-
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
 #include "backend.h"
 #undef  optimize                         // avoid options.h macro
-
 #include "tree-pass.h"
 #include "context.h"
-
 #include "tree.h"
 #include "tree-core.h"
 #include "function.h"
@@ -16,13 +13,11 @@
 #include "gimple.h"
 #include "gimple-iterator.h"
 #include "cgraph.h"
-
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace {
-
 const pass_data cloneprune_pass_data = {
     GIMPLE_PASS,
     "cloneprune",           // -fdump-tree-cloneprune
@@ -35,13 +30,10 @@ const pass_data cloneprune_pass_data = {
 class pass_cloneprune : public gimple_opt_pass {
 public:
     pass_cloneprune (gcc::context *ctxt) : gimple_opt_pass (cloneprune_pass_data, ctxt) {}
-
     unsigned int execute (function *fun) override {
         if (!dump_file || !fun) return 0;
-
         const std::string fname = IDENTIFIER_POINTER (DECL_NAME (fun->decl));
         const std::string sig   = signature (fun);
-
         if (sig_to_first.count (sig)) {
             fprintf (dump_file, "PRUNE:  %s (dup of %s)\n", fname.c_str (), sig_to_first[sig].c_str ());
             clones[ sig_to_first[sig] ].push_back (fname);
@@ -49,15 +41,12 @@ public:
             sig_to_first[sig] = fname;
             fprintf (dump_file, "NOPRUNE:%s\n", fname.c_str ());
         }
-
         if (fname == "main") summary ();
         return 0;
     }
-
 private:
     static std::unordered_map<std::string,std::string> sig_to_first;
     static std::unordered_map<std::string,std::vector<std::string>> clones;
-
     std::string signature (function *fun) {
         std::string s;
         basic_block bb;
@@ -69,7 +58,6 @@ private:
         }
         return s;
     }
-
     void summary () {
         fprintf (dump_file, "\n=== CLONEPRUNE SUMMARY ===\n");
         size_t total = 0; for (auto &kv : clones) total += kv.second.size ();
@@ -82,10 +70,8 @@ private:
         fprintf (dump_file, "===========================\n\n");
     }
 };
-
 std::unordered_map<std::string,std::string> pass_cloneprune::sig_to_first;
 std::unordered_map<std::string,std::vector<std::string>> pass_cloneprune::clones;
-
 } // anon
 
 gimple_opt_pass *make_pass_cloneprune (gcc::context *ctxt)
