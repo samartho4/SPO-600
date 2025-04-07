@@ -171,3 +171,4 @@ make_pass_cloneprune (gcc::context *ctxt)
 {
     return new pass_cloneprune (ctxt);
 }
+
