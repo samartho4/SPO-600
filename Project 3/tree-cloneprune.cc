@@ -104,6 +104,9 @@ public:
 
         return 0;
     }
+opt_pass *clone() override {
+    return new pass_cloneprune(m_ctxt);
+}
 
 private:
     // Maps to track functions
