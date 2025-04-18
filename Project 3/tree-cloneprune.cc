@@ -104,9 +104,16 @@ public:
 
         return 0;
     }
-opt_pass *clone() override {
-    return new pass_cloneprune(m_ctxt);
-}
+
+    // Clone method for the pass
+    opt_pass *clone() override {
+        return new pass_cloneprune(m_ctxt);
+    }
+
+    // Set pass parameter method
+    void set_pass_param(unsigned int n, bool param) override {
+        // Simply store or use the parameter as needed
+    }
 
 private:
     // Maps to track functions
@@ -120,13 +127,14 @@ private:
         FunctionInfo info;
         info.full_name = IDENTIFIER_POINTER(DECL_NAME(fun->decl));
         
-        // Use regex to check if this is a clone (has .variant suffix)
-        std::regex clone_pattern("(.+)\\.[^.]+$");
+        // Use regex to check if this is a clone (matches both base.variant and base_variant patterns)
+        std::regex clone_pattern("(.+?)(?:\\.|_)(O[23]|[^.]+)$");
         std::smatch match;
         if (std::regex_search(info.full_name, match, clone_pattern)) {
             info.original_name = match[1];
             info.is_clone = true;
-            info.is_resolver = info.full_name.find(".resolver") != std::string::npos;
+            info.is_resolver = (info.full_name.find(".resolver") != std::string::npos) || 
+                               (info.full_name.find("_resolver") != std::string::npos);
         } else {
             info.original_name = info.full_name;
             info.is_clone = false;
